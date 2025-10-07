@@ -1,0 +1,87 @@
+CREATE TABLE credit_risk (
+    person_age INT,
+    person_income NUMERIC,
+    person_home_ownership VARCHAR,
+    person_emp_length NUMERIC,
+    loan_intent VARCHAR,
+    loan_grade VARCHAR,
+    loan_amnt NUMERIC,
+    loan_int_rate NUMERIC,
+    loan_status INT,   -- 1 = default, 0 = paid
+    loan_percent_income NUMERIC,
+    cb_person_default_on_file VARCHAR,
+    cb_person_cred_hist_length INT
+);
+
+SELECT COUNT(*) FROM credit_risk;
+SELECT * FROM credit_risk LIMIT 10;
+
+SELECT 
+    COUNT(*) FILTER (WHERE person_age IS NULL) AS age_nulls,
+    COUNT(*) FILTER (WHERE person_income IS NULL) AS income_nulls,
+    COUNT(*) FILTER (WHERE person_home_ownership IS NULL) AS home_nulls,
+    COUNT(*) FILTER (WHERE person_emp_length IS NULL) AS emp_nulls,
+    COUNT(*) FILTER (WHERE loan_intent IS NULL) AS intent_nulls,
+    COUNT(*) FILTER (WHERE loan_grade IS NULL) AS grade_nulls,
+    COUNT(*) FILTER (WHERE loan_amnt IS NULL) AS amount_nulls,
+    COUNT(*) FILTER (WHERE loan_int_rate IS NULL) AS rate_nulls,
+    COUNT(*) FILTER (WHERE loan_status IS NULL) AS status_nulls,
+    COUNT(*) FILTER (WHERE loan_percent_income IS NULL) AS percent_nulls,
+    COUNT(*) FILTER (WHERE cb_person_default_on_file IS NULL) AS cb_default_nulls,
+    COUNT(*) FILTER (WHERE cb_person_cred_hist_length IS NULL) AS hist_nulls
+FROM credit_risk;
+
+--person_emp_length → 895 NULLs
+--loan_int_rate → 3116 NULLs
+--All other columns → no missing values
+--Employment Length (895 missing): These rows may still be usable (other info is present). You can either keep them or later decide to fill with “Unknown” or median.
+--Loan Interest Rate (3116 missing): This is a bigger issue, since interest rate is very important for credit risk analysis. We’ll need to decide:
+--Drop rows with missing interest rates, OR
+--Impute with average/median interest rates by loan grade.
+
+--Overall Default Rate
+SELECT 
+    loan_status, 
+    COUNT(*) AS total_loans,
+    ROUND(100.0 * COUNT(*) / (SELECT COUNT(*) FROM credit_risk), 2) AS pct
+FROM credit_risk
+GROUP BY loan_status;
+
+--Default Rate by Loan Intent
+
+SELECT 
+    loan_intent,
+    COUNT(*) FILTER (WHERE loan_status = 1) AS defaults,
+    COUNT(*) FILTER (WHERE loan_status = 0) AS non_defaults,
+    ROUND(100.0 * COUNT(*) FILTER (WHERE loan_status = 1) / COUNT(*), 2) AS default_rate_pct
+FROM credit_risk
+GROUP BY loan_intent
+ORDER BY default_rate_pct DESC;
+
+--Income Bands vs Default
+
+SELECT 
+    CASE 
+        WHEN person_income < 20000 THEN 'Low Income (<20k)'
+        WHEN person_income BETWEEN 20000 AND 50000 THEN 'Mid Income (20k-50k)'
+        WHEN person_income BETWEEN 50000 AND 100000 THEN 'High Income (50k-100k)'
+        ELSE 'Very High Income (100k+)'
+    END AS income_band,
+    COUNT(*) FILTER (WHERE loan_status = 1) AS defaults,
+    COUNT(*) FILTER (WHERE loan_status = 0) AS non_defaults,
+    ROUND(100.0 * COUNT(*) FILTER (WHERE loan_status = 1) / COUNT(*), 2) AS default_rate_pct
+FROM credit_risk
+GROUP BY income_band
+ORDER BY default_rate_pct DESC;
+
+
+--Credit History Length vs Default
+
+SELECT 
+    cb_person_cred_hist_length AS credit_history_years,
+    COUNT(*) FILTER (WHERE loan_status = 1) AS defaults,
+    COUNT(*) FILTER (WHERE loan_status = 0) AS non_defaults,
+    ROUND(100.0 * COUNT(*) FILTER (WHERE loan_status = 1) / COUNT(*), 2) AS default_rate_pct
+FROM credit_risk
+GROUP BY credit_history_years
+ORDER BY credit_history_years;
